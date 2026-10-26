@@ -7,7 +7,36 @@
  */
 export const isHebrewText = (text: string): boolean => {
   if (!text) return true; // пустая строка считается валидной
-  return /^[\u0590-\u05FF\s'’`]*$/.test(text);
+  return /^[\u0590-\u05FF\s'’`]*$/.test(stripInvisible(text));
+};
+
+/**
+ * Убирает невидимые символы, которые телефонные клавиатуры добавляют к ивритскому тексту:
+ * метки направления (RLM, LRM, встраивания, изоляты), пробел нулевой ширины, BOM
+ * @param text - текст
+ * @returns текст без невидимых символов
+ */
+export const stripInvisible = (text: string): string => {
+  return text.replace(/[\u200B-\u200F\u202A-\u202E\u2066-\u2069\u061C\uFEFF]/g, '');
+};
+
+/**
+ * Убирает огласовки и знаки кантилляции (макеф, пасек и гереш остаются)
+ * @param text - текст
+ * @returns текст без огласовок
+ */
+export const stripNikud = (text: string): string => {
+  return text.replace(/[\u0591-\u05BD\u05BF\u05C1\u05C2\u05C4\u05C5\u05C7]/g, '');
+};
+
+/**
+ * Приводит введённое слово к виду для сравнения: без невидимых символов и огласовок,
+ * пробелы по краям обрезаны, несколько пробелов подряд (любых, включая неразрывный) — один
+ * @param text - введённый текст
+ * @returns очищенный текст
+ */
+export const cleanHebrewInput = (text: string): string => {
+  return stripNikud(normalizeGeresh(stripInvisible(text))).replace(/\s+/g, ' ').trim();
 };
 
 /**
@@ -53,14 +82,39 @@ export const normalizeFinalLetters = (text: string): string => {
 };
 
 /**
- * Сравнивает два ивритских слова с учётом нормализации финальных форм
+ * Убирает удвоение י и ו: в иврите допускается и полное, и краткое написание (עגבנייה / עגבניה)
+ * @param text - текст
+ * @returns текст с одиночными י и ו
+ */
+export const collapseDoubleLetters = (text: string): string => {
+  return text.replace(/יי/g, 'י').replace(/וו/g, 'ו');
+};
+
+/** Как ответ совпал с правильным словом: точно, другим допустимым написанием или не совпал */
+export type SpellingMatch = 'exact' | 'variant' | 'none';
+
+/**
+ * Сравнивает ответ с правильным словом. Не учитывает финальные формы, огласовки,
+ * лишние и невидимые пробелы, апостроф вместо гереша; удвоенные י и ו засчитывает как вариант написания
+ * @param answer - ответ пользователя
+ * @param target - правильное слово
+ * @returns 'exact', 'variant' или 'none'
+ */
+export const matchHebrewSpelling = (answer: string, target: string): SpellingMatch => {
+  const a = normalizeFinalLetters(cleanHebrewInput(answer));
+  const t = normalizeFinalLetters(cleanHebrewInput(target));
+  if (a === t) return 'exact';
+  return collapseDoubleLetters(a) === collapseDoubleLetters(t) ? 'variant' : 'none';
+};
+
+/**
+ * Сравнивает два ивритских слова (см. matchHebrewSpelling), варианты написания тоже считаются совпадением
  * @param word1 - первое слово
  * @param word2 - второе слово
  * @returns true если слова одинаковые
  */
 export const compareHebrewWords = (word1: string, word2: string): boolean => {
-  const normalize = (word: string) => normalizeFinalLetters(normalizeGeresh(word.trim()));
-  return normalize(word1) === normalize(word2);
+  return matchHebrewSpelling(word1, word2) !== 'none';
 };
 
 /**

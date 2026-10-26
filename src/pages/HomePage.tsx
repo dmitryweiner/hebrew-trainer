@@ -10,6 +10,7 @@ import { useProgress } from '../state/progressContext';
 import { useSpeechAvailable } from '../hooks/useSpeech';
 import { pluralRu } from '../utils/plural';
 import VocabularyCard from '../components/VocabularyCard';
+import TopicPicker from '../components/TopicPicker';
 import InstallCard from '../pwa/InstallCard';
 
 /** Порядок игр в меню. «Угадай букву» используется только в «Тренировке дня». */
@@ -69,6 +70,7 @@ const HomePage = () => {
       )}
 
       <VocabularyCard summary={vocabulary} />
+      <TopicPicker />
 
       <h2 className="section-title">Игры</h2>
       <div className="game-grid">

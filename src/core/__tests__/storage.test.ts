@@ -34,6 +34,7 @@ describe('storage', () => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify({ version: 2, words: { a: { box: 2 } } }));
     const p = loadProgress();
     expect(p.settings.sound).toBe(true);
+    expect(p.settings.topic).toBeNull();
     expect(p.words.a.box).toBe(2);
     expect(p.days).toEqual({});
   });

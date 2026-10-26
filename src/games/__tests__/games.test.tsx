@@ -143,6 +143,24 @@ describe('Напиши слово', () => {
     expect(onDone).toHaveBeenCalledWith([{ wordId: 'dog', correct: true }]);
   });
 
+  it('пробелы и невидимые символы по краям не мешают', () => {
+    const { onDone } = renderTask(WordInputTask, 'word-input', ['dog']);
+    type(` \u200F${he('dog')}\u00A0 `);
+    expect(screen.getByText('✓ Правильно!')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Дальше →' }));
+    expect(onDone).toHaveBeenCalledWith([{ wordId: 'dog', correct: true }]);
+  });
+
+  it('краткое написание засчитывается и показывает полную форму', () => {
+    const { onDone } = renderTask(WordInputTask, 'word-input', ['tomato']);
+    type('עגבניה');
+    const feedback = screen.getByText('✓ Верно! Обычно пишут так:').closest('.answer-feedback');
+    expect(feedback).toHaveClass('is-correct');
+    expect(feedback).toHaveTextContent(he('tomato'));
+    fireEvent.click(screen.getByRole('button', { name: 'Дальше →' }));
+    expect(onDone).toHaveBeenCalledWith([{ wordId: 'tomato', correct: true }]);
+  });
+
   it('экранная клавиатура включается кнопкой, ⌫ стирает букву', () => {
     const { onDone } = renderTask(WordInputTask, 'word-input', ['dog']);
     expect(screen.queryByRole('group', { name: 'Клавиатура иврита' })).toBeNull();

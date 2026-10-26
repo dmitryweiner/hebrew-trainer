@@ -2,7 +2,7 @@
 
 import { useRef, useState } from 'react';
 import { WORD_BY_ID } from '../data/dictionary';
-import { compareHebrewWords, countHebrewLetters, getRandomPosition, isHebrewText, normalizeGeresh } from '../utils/hebrewUtils';
+import { cleanHebrewInput, countHebrewLetters, getRandomPosition, isHebrewText, matchHebrewSpelling, normalizeGeresh } from '../utils/hebrewUtils';
 import WordImage from '../components/WordImage';
 import HebrewText from '../components/HebrewText';
 import AnswerFeedback from '../components/game/AnswerFeedback';
@@ -20,14 +20,18 @@ const WordInputTask = ({ task, onDone }: TaskProps) => {
   const [value, setValue] = useState('');
   const [attempts, setAttempts] = useState(0);
   const [finished, setFinished] = useState<boolean | null>(null);   // null — ещё отвечаем
+  const [variant, setVariant] = useState(false);   // засчитано другое написание (עגבניה вместо עגבנייה)
   const [hiddenPosition] = useState(() => getRandomPosition(word.hebrew));
   const inputRef = useRef<HTMLInputElement>(null);
   const letterCount = countHebrewLetters(word.hebrew);
   const wrongLayout = value !== '' && !isHebrewText(value);
+  const empty = cleanHebrewInput(value) === '';
 
   const check = () => {
-    if (!value.trim() || finished !== null) return;
-    if (compareHebrewWords(value, word.hebrew)) {
+    if (empty || finished !== null) return;
+    const match = matchHebrewSpelling(value, word.hebrew);
+    if (match !== 'none') {
+      setVariant(match === 'variant');
       setFinished(true);
       return;
     }
@@ -40,6 +44,12 @@ const WordInputTask = ({ task, onDone }: TaskProps) => {
 
   // Написал сам, пусть и с подсказкой, — ответ засчитан
   const correct = finished === true;
+  // Правильное написание показывает карточка ответа сразу под сообщением
+  const message = !correct
+    ? undefined
+    : variant
+      ? `✓ Верно${attempts > 0 ? ', но не с первой попытки.' : '!'} Обычно пишут так:`
+      : attempts > 0 ? '✓ Верно, но не с первой попытки' : undefined;
 
   return (
     <div className="task">
@@ -92,7 +102,7 @@ const WordInputTask = ({ task, onDone }: TaskProps) => {
           {attempts > 0 && (
             <div className="text-danger mt-2">✗ Не так. Попытка {attempts + 1} из {MAX_ATTEMPTS}</div>
           )}
-          <button className="btn btn-success btn-lg w-100 mt-3" disabled={!value.trim()} onClick={check}>
+          <button className="btn btn-success btn-lg w-100 mt-3" disabled={empty} onClick={check}>
             Проверить
           </button>
           <button
@@ -108,7 +118,7 @@ const WordInputTask = ({ task, onDone }: TaskProps) => {
         <AnswerFeedback
           word={word}
           correct={correct}
-          message={correct && attempts > 0 ? '✓ Верно, но не с первой попытки' : undefined}
+          message={message}
           onNext={() => onDone([{ wordId: word.id, correct }])}
         />
       )}

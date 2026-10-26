@@ -151,6 +151,7 @@ body {
 .daily-subtitle { display: block; opacity: 0.9; font-size: 1rem; }
 
 .vocab-card { margin-bottom: 8px; box-shadow: var(--shadow); }
+.topic-card { margin-bottom: 8px; box-shadow: var(--shadow); }
 .vocab-ring { width: 96px; height: 96px; flex: none; transform: rotate(-90deg); }
 .vocab-ring circle { fill: none; stroke-width: 12; }
 .ring-track { stroke: #e0e0e0; }

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import type { Word } from '../../types';
-import { buildDailyRound, buildGameRound, interleaveByCategory, pickWords, tasksForWords } from '../scheduler';
+import { BEGINNER_NEW_WORDS, buildDailyRound, buildGameRound, interleaveByCategory, MAX_DUE_SHARE, pickWords, tasksForWords } from '../scheduler';
 import { createProgress, type Box, type Progress } from '../progress';
 import { addDays } from '../dates';
 
@@ -47,6 +47,31 @@ describe('pickWords', () => {
     expect(picked).toHaveLength(3);
   });
 
+  it('слова к повторению занимают не больше доли раунда, остальное — новые', () => {
+    const boxes: Record<string, [Box]> = {};
+    for (let i = 0; i < 15; i++) boxes[`w${i}`] = [2];
+    const p = withBoxes(boxes);
+    const picked = pickWords(p, words, 10, today).map(w => w.id);
+    expect(picked).toHaveLength(10);
+    expect(picked.filter(id => p.words[id]).length).toBe(Math.ceil(10 * MAX_DUE_SHARE));
+  });
+
+  it('если новых нет, раунд добирается словами к повторению', () => {
+    const boxes: Record<string, [Box]> = {};
+    for (let i = 0; i < 15; i++) boxes[`w${i}`] = [2];
+    const picked = pickWords(withBoxes(boxes), words, 10, today, { newLimit: 0 }).map(w => w.id);
+    expect(picked.every(id => Number(id.slice(1)) < 15)).toBe(true);
+  });
+
+  it('новые слова берутся из выбранной темы, а когда она кончилась — из других', () => {
+    const picked = pickWords(createProgress(), words, 5, today, { topic: 'food' });
+    expect(picked.every(w => w.category === 'food')).toBe(true);
+    const foodStarted: Record<string, [Box, string]> = {};
+    for (const w of words.filter(w => w.category === 'food')) foodStarted[w.id] = [2, addDays(today, 1)];
+    const others = pickWords(withBoxes(foodStarted), words, 3, today, { topic: 'food', minBox: 0, maxBox: 0 });
+    expect(others.every(w => w.category === 'home')).toBe(true);
+  });
+
   it('не повторяет слова и учитывает exclude', () => {
     const picked = pickWords(createProgress(), words, 10, today, { exclude: new Set(['w0']) }).map(w => w.id);
     expect(new Set(picked).size).toBe(picked.length);
@@ -67,6 +92,21 @@ describe('buildGameRound', () => {
     const tasks = buildGameRound('word-choice', createProgress(), words, today, { typing: true, tts: false });
     expect(tasks).toHaveLength(10);
     expect(tasks.every(t => t.game === 'word-choice' && t.wordIds.length === 1)).toBe(true);
+  });
+
+  it('новичку даёт больше новых слов за раунд', () => {
+    const p = withBoxes({ w0: [2], w1: [2] });
+    const withDue = buildGameRound('word-choice', p, words, today, { typing: true, tts: false }).flatMap(t => t.wordIds);
+    expect(withDue.filter(id => !p.words[id]).length).toBe(BEGINNER_NEW_WORDS);
+  });
+
+  it('опытному пользователю — обычный лимит новых слов', () => {
+    const many: Word[] = Array.from({ length: 60 }, (_, i) => ({ ...words[0], id: `m${i}` }));
+    const boxes: Record<string, [Box, string]> = {};
+    for (let i = 0; i < 40; i++) boxes[`m${i}`] = [3, i < 2 ? today : addDays(today, 3)];
+    const p = withBoxes(boxes);
+    const ids = buildGameRound('word-choice', p, many, today, { typing: true, tts: false }).flatMap(t => t.wordIds);
+    expect(ids.filter(id => !p.words[id]).length).toBe(5);
   });
 
   it('«Повторить ошибки» строит раунд из указанных слов', () => {
@@ -96,6 +136,12 @@ describe('buildDailyRound', () => {
     expect(tasks.length).toBeLessThanOrEqual(12);
     expect(tasks.some(t => t.game === 'matching')).toBe(true);
     expect(tasks.filter(t => t.game === 'word-input').length).toBeLessThanOrEqual(2);
+  });
+
+  it('новые слова «Тренировки дня» — из выбранной темы', () => {
+    const tasks = buildDailyRound(createProgress(), words, today, { typing: true, tts: false, topic: 'home' });
+    const fresh = tasks.filter(t => t.game === 'flashcards').map(t => words.find(w => w.id === t.wordIds[0])!.category);
+    expect(fresh).toEqual(Array(5).fill('home'));
   });
 
   it('без письма не даёт «Напиши слово»', () => {

@@ -45,6 +45,7 @@ const normalizeSettings = (raw: Partial<Settings> | undefined): Settings => {
   const settings = { ...DEFAULT_SETTINGS, ...raw };
   // диапазон задержки менялся — подтягиваем старые значения в допустимые границы
   settings.feedbackDelay = Math.min(FEEDBACK_DELAY_MAX, Math.max(FEEDBACK_DELAY_MIN, Number(settings.feedbackDelay) || DEFAULT_SETTINGS.feedbackDelay));
+  if (typeof settings.topic !== 'string') settings.topic = null;
   return settings;
 };
 

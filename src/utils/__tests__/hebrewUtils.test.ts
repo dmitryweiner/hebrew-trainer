@@ -5,6 +5,8 @@ import {
   isHebrewText,
   normalizeFinalLetters,
   compareHebrewWords,
+  cleanHebrewInput,
+  matchHebrewSpelling,
   getSimilarHebrewLetters,
   getHebrewAlphabet,
   getRandomHebrewLetter,
@@ -206,6 +208,40 @@ describe('hebrewUtils', () => {
 
     it('compareHebrewWords не различает апостроф и гереш', () => {
       expect(compareHebrewWords("ג'ירפה", 'ג׳ירפה')).toBe(true);
+    });
+
+    it('cleanHebrewInput убирает невидимые символы, огласовки и лишние пробелы', () => {
+      expect(cleanHebrewInput('\u200Fשלום\u200E ')).toBe('שלום');
+      expect(cleanHebrewInput('\u00A0שלום\u200B')).toBe('שלום');
+      expect(cleanHebrewInput('  בית   ספר ')).toBe('בית ספר');
+      expect(cleanHebrewInput('תַּפּוּחַ')).toBe('תפוח');
+    });
+
+    it('isHebrewText не ругается на невидимые метки направления', () => {
+      expect(isHebrewText('\u200Fשלום\u200F')).toBe(true);
+    });
+
+    it('compareHebrewWords принимает ответ с невидимыми и неразрывными пробелами', () => {
+      expect(compareHebrewWords('\u202Bשלום\u202C\u00A0', 'שלום')).toBe(true);
+      expect(compareHebrewWords('בית  ספר', 'בית ספר')).toBe(true);
+    });
+  });
+
+  describe('matchHebrewSpelling', () => {
+    it('точное совпадение', () => {
+      expect(matchHebrewSpelling(' עגבנייה ', 'עגבנייה')).toBe('exact');
+    });
+
+    it('краткое написание без удвоенных י и ו — вариант', () => {
+      expect(matchHebrewSpelling('עגבניה', 'עגבנייה')).toBe('variant');
+      expect(matchHebrewSpelling('ברוז', 'ברווז')).toBe('variant');
+      expect(matchHebrewSpelling('עגבנייה', 'עגבניה')).toBe('variant');
+      expect(compareHebrewWords('עגבניה', 'עגבנייה')).toBe(true);
+    });
+
+    it('другое слово не засчитывается', () => {
+      expect(matchHebrewSpelling('עגבנה', 'עגבנייה')).toBe('none');
+      expect(matchHebrewSpelling('', 'עגבנייה')).toBe('none');
     });
 
     it('isHebrewLetter отличает буквы от пробела и гереша', () => {

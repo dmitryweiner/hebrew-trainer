@@ -42,6 +42,7 @@ const RoundRunner = ({ kind, wordIds }: RoundRunnerProps) => {
       typing: progress.settings.typing,
       tts: ttsAvailable,
       wordIds,
+      topic: progress.settings.topic,
     })
   );
   const { state, task, finished, answer } = useRound(kind, tasks);

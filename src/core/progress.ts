@@ -57,6 +57,7 @@ export interface Settings {
   keyboard: 'screen' | 'system';   // клавиатура в «Напиши слово»
   autoNext: boolean;               // переходить к следующему заданию самому
   feedbackDelay: number;           // сколько секунд показывать ответ перед автопереходом
+  topic: string | null;            // из какой темы брать новые слова, null — из всех
 }
 
 export const FEEDBACK_DELAY_MIN = 1;
@@ -84,6 +85,7 @@ export const DEFAULT_SETTINGS: Settings = {
   keyboard: 'system',
   autoNext: true,
   feedbackDelay: 1,
+  topic: null,
 };
 
 export const createProgress = (): Progress => ({

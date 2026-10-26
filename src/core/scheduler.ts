@@ -48,24 +48,44 @@ export const interleaveByCategory = (words: Word[]): Word[] => {
 /** Сколько новых слов можно ввести за один раунд */
 export const NEW_WORDS_PER_ROUND = 5;
 
+/** Пока знакомых слов меньше BEGINNER_WORDS, новых за раунд даём больше: иначе первые дни крутятся одни и те же слова */
+export const BEGINNER_WORDS = 30;
+export const BEGINNER_NEW_WORDS = 8;
+
+/** Слова к повторению занимают не больше этой доли раунда, если есть новые */
+export const MAX_DUE_SHARE = 0.6;
+
+/** Лимит новых слов за раунд игры: для новичка больше */
+export const newWordsLimit = (progress: Progress, words: Word[]): number => {
+  const started = words.filter(w => (progress.words[w.id]?.box ?? 0) > 0).length;
+  return started < BEGINNER_WORDS ? BEGINNER_NEW_WORDS : NEW_WORDS_PER_ROUND;
+};
+
+/** Слова выбранной темы — вперёд, остальные — за ними в прежнем порядке */
+export const preferTopic = (words: Word[], topic?: string | null): Word[] =>
+  topic ? [...words.filter(w => w.category === topic), ...words.filter(w => w.category !== topic)] : words;
+
 export interface PickOptions {
   minBox?: Box;
   maxBox?: Box;
   newLimit?: number;
   exclude?: Set<string>;
+  topic?: string | null;   // тема, из которой в первую очередь брать новые и знакомые слова
 }
 
 /**
  * Выбирает слова для раунда в порядке приоритета:
- * 1) слова, которые пора повторить; 2) новые слова (не больше newLimit);
- * 3) давно не виденные знакомые слова; 4) любые оставшиеся, если подходящих не хватило.
+ * 1) слова, которые пора повторить (не больше MAX_DUE_SHARE раунда); 2) новые слова (не больше newLimit);
+ * 3) остальные слова к повторению; 4) давно не виденные знакомые слова;
+ * 5) любые оставшиеся, если подходящих не хватило.
+ * Новые и знакомые слова выбранной темы идут раньше остальных.
  */
 export const pickWords = (
   progress: Progress,
   words: Word[],
   count: number,
   today: Day,
-  { minBox = 0, maxBox = 5, newLimit = NEW_WORDS_PER_ROUND, exclude = new Set() }: PickOptions = {}
+  { minBox = 0, maxBox = 5, newLimit = NEW_WORDS_PER_ROUND, exclude = new Set(), topic }: PickOptions = {}
 ): Word[] => {
   const boxOf = (w: Word): Box => progress.words[w.id]?.box ?? 0;
   const available = words.filter(w => !exclude.has(w.id));
@@ -74,10 +94,10 @@ export const pickWords = (
   const due = inRange
     .filter(w => isDue(progress.words[w.id], today))
     .sort((a, b) => progress.words[a.id].due.localeCompare(progress.words[b.id].due) || boxOf(a) - boxOf(b));
-  const fresh = interleaveByCategory(inRange.filter(w => boxOf(w) === 0)).slice(0, newLimit);
-  const rest = inRange
+  const fresh = preferTopic(interleaveByCategory(inRange.filter(w => boxOf(w) === 0)), topic).slice(0, newLimit);
+  const rest = preferTopic(inRange
     .filter(w => boxOf(w) > 0 && !isDue(progress.words[w.id], today))
-    .sort((a, b) => progress.words[a.id].lastSeen.localeCompare(progress.words[b.id].lastSeen));
+    .sort((a, b) => progress.words[a.id].lastSeen.localeCompare(progress.words[b.id].lastSeen)), topic);
 
   const picked: Word[] = [];
   const add = (list: Word[]) => {
@@ -86,13 +106,15 @@ export const pickWords = (
       if (!picked.includes(w)) picked.push(w);
     }
   };
-  add(due);
+  // Иначе при большом долге раунд целиком из одних и тех же слов и новые не появляются
+  add(due.slice(0, Math.ceil(count * MAX_DUE_SHARE)));
   add(fresh);
+  add(due);
   add(rest);
   if (picked.length < count) {
     // Подходящих слов мало (например, для «Напиши слово» ещё ничего не выучено):
     // берём самые знакомые из оставшихся, затем новые
-    add([...available].sort((a, b) => boxOf(b) - boxOf(a)));
+    add(preferTopic([...available].sort((a, b) => boxOf(b) - boxOf(a)), topic));
   }
   return shuffleArray(picked);
 };
@@ -128,6 +150,7 @@ export interface RoundOptions {
   typing: boolean;      // разрешены задания с письмом
   tts: boolean;         // доступна озвучка
   wordIds?: string[];   // конкретные слова («Повторить ошибки», «Трудные слова»)
+  topic?: string | null;   // тема новых слов, null — все темы
 }
 
 /** Минимум слов для игр на пары */
@@ -158,7 +181,8 @@ export const buildGameRound = (
     minBox: config.minBox,
     maxBox: config.maxBox,
     // В «Верно/Неверно» и «Мемори» новые слова не вводим: там нечему учиться с нуля
-    newLimit: config.affectsBoxes ? NEW_WORDS_PER_ROUND : 0,
+    newLimit: config.affectsBoxes ? newWordsLimit(progress, words) : 0,
+    topic: options.topic,
   });
   return tasksForWords(game, picked.map(w => w.id));
 };
@@ -176,9 +200,9 @@ export const buildDailyRound = (
   const MAX_TASKS = 12;
   const boxOf = (id: string): Box => progress.words[id]?.box ?? 0;
   const dueCount = words.filter(w => isDue(progress.words[w.id], today)).length;
-  const newCount = dueCount >= 8 ? 2 : dueCount >= 4 ? 3 : NEW_WORDS_PER_ROUND;
+  const newCount = dueCount >= 12 ? 2 : dueCount >= 6 ? 3 : NEW_WORDS_PER_ROUND;
 
-  const fresh = interleaveByCategory(words.filter(w => boxOf(w.id) === 0)).slice(0, newCount);
+  const fresh = preferTopic(interleaveByCategory(words.filter(w => boxOf(w.id) === 0)), options.topic).slice(0, newCount);
   const tasks: Task[] = [
     ...fresh.map(w => makeTask('flashcards', [w.id])),
     ...shuffleArray(fresh).map(w => makeTask('letter-choice', [w.id])),
@@ -189,6 +213,7 @@ export const buildDailyRound = (
     minBox: 1,
     newLimit: 0,
     exclude: new Set(fresh.map(w => w.id)),
+    topic: options.topic,
   }).filter(w => boxOf(w.id) > 0);
 
   if (review.length === 0) return tasks;
