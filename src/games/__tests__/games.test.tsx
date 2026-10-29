@@ -17,13 +17,19 @@ const AUTO_NEXT_DELAY = DEFAULT_SETTINGS.feedbackDelay * 1000;
 
 const he = (id: string) => WORD_BY_ID[id].hebrew;
 
+const withAutoNext = (feedbackDelay = DEFAULT_SETTINGS.feedbackDelay) => {
+  const progress = createProgress();
+  progress.settings = { ...progress.settings, autoNext: true, feedbackDelay };
+  return progress;
+};
+
 beforeEach(() => localStorage.clear());
 afterEach(() => vi.useRealTimers());
 
 describe('Угадай слово', () => {
   it('правильный ответ: «Правильно!» и автопереход', () => {
     vi.useFakeTimers();
-    const { onDone } = renderTask(WordChoiceTask, 'word-choice', ['dog']);
+    const { onDone } = renderTask(WordChoiceTask, 'word-choice', ['dog'], withAutoNext());
     fireEvent.click(screen.getByRole('button', { name: he('dog') }));
     expect(screen.getByText('✓ Правильно!')).toBeInTheDocument();
     act(() => vi.advanceTimersByTime(AUTO_NEXT_DELAY));
@@ -55,7 +61,7 @@ describe('Угадай слово', () => {
       removeEventListener: () => undefined,
     });
     try {
-      const { onDone } = renderTask(WordChoiceTask, 'word-choice', ['dog']);
+      const { onDone } = renderTask(WordChoiceTask, 'word-choice', ['dog'], withAutoNext());
       fireEvent.click(screen.getByRole('button', { name: he('dog') }));
       fireEvent.click(screen.getByRole('button', { name: '🔊' }));
       act(() => vi.advanceTimersByTime(10_000));
@@ -68,11 +74,9 @@ describe('Угадай слово', () => {
     }
   });
 
-  it('без автоперехода ждёт «Дальше», переход засчитывается один раз', () => {
+  it('по умолчанию автоперехода нет: ждёт «Дальше», переход засчитывается один раз', () => {
     vi.useFakeTimers();
-    const progress = createProgress();
-    progress.settings = { ...progress.settings, autoNext: false };
-    const { onDone } = renderTask(WordChoiceTask, 'word-choice', ['dog'], progress);
+    const { onDone } = renderTask(WordChoiceTask, 'word-choice', ['dog']);
     fireEvent.click(screen.getByRole('button', { name: he('dog') }));
     act(() => vi.advanceTimersByTime(10_000));
     expect(onDone).not.toHaveBeenCalled();
@@ -83,9 +87,7 @@ describe('Угадай слово', () => {
 
   it('задержка автоперехода берётся из настроек', () => {
     vi.useFakeTimers();
-    const progress = createProgress();
-    progress.settings = { ...progress.settings, feedbackDelay: 3 };
-    const { onDone } = renderTask(WordChoiceTask, 'word-choice', ['dog'], progress);
+    const { onDone } = renderTask(WordChoiceTask, 'word-choice', ['dog'], withAutoNext(3));
     fireEvent.click(screen.getByRole('button', { name: he('dog') }));
     act(() => vi.advanceTimersByTime(2900));
     expect(onDone).not.toHaveBeenCalled();

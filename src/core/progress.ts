@@ -83,7 +83,7 @@ export const DEFAULT_SETTINGS: Settings = {
   tts: true,
   typing: true,
   keyboard: 'system',
-  autoNext: true,
+  autoNext: false,
   feedbackDelay: 1,
   topic: null,
 };
